@@ -6,7 +6,7 @@
  */
 
 import './polyfill.js';
-import type { StrudelEngine } from './types.js';
+import type { StrudelEngine, ValidationResult } from './types.js';
 
 export async function createEngine(): Promise<StrudelEngine> {
   // Dynamic imports — Strudel modules read globalThis at import time,
@@ -77,24 +77,124 @@ export async function createEngine(): Promise<StrudelEngine> {
     }
   }
 
-  // Create the REPL instance
-  const replInstance = (core as any).repl({
+  // Create the REPL instance — transpiler is CRITICAL for:
+  // - $: syntax (parallel patterns)
+  // - multi-statement code (setcpm() + stack())
+  // - double-quote → mini notation conversion
+  // - return injection (wrapping last expression)
+  const replOptions: Record<string, unknown> = {
     defaultOutput: (webaudio as any).webaudioOutput,
     getTime: () => audioContext.currentTime,
-  });
+  };
+
+  const transpilerFn = transpiler && (transpiler as any).transpiler;
+  if (transpilerFn) {
+    replOptions.transpiler = transpilerFn;
+  }
+  const replInstance = (core as any).repl(replOptions);
 
   // Verify repl was created
   if (!replInstance || !replInstance.evaluate) {
     throw new Error('Failed to create Strudel REPL — no evaluate method');
   }
 
+  // ── Validation ──
+  // Uses the transpiler to pre-check code for syntax errors and
+  // mini-notation parse errors WITHOUT executing the code.
+  const validate = (code: string): ValidationResult => {
+    // Step 1: Try transpiling (catches JS syntax errors and mini-notation errors)
+    if (transpilerFn) {
+      try {
+        transpilerFn(code);
+      } catch (err: any) {
+        const msg = err.message || String(err);
+        return {
+          valid: false,
+          error: msg,
+          line: err.loc?.line,
+          column: err.loc?.column,
+        };
+      }
+    }
+
+    // Step 2: If no transpiler, try basic JS syntax check via Function constructor
+    if (!transpilerFn) {
+      try {
+        // eslint-disable-next-line no-new-func
+        new Function(code);
+      } catch (err: any) {
+        return {
+          valid: false,
+          error: err.message || String(err),
+        };
+      }
+    }
+
+    return { valid: true };
+  };
+
+  // ── Evaluate with error capture ──
+  // Strudel REPL's evaluate() NEVER throws — it logs errors to console
+  // and resolves with undefined. We intercept console.error to capture
+  // these swallowed errors and throw them properly.
   const evaluate = async (code: string): Promise<void> => {
+    // Pre-validate: catches syntax and mini-notation errors before eval
+    const validation = validate(code);
+    if (!validation.valid) {
+      const loc = validation.line != null ? ` (line ${validation.line}, col ${validation.column})` : '';
+      throw new Error(`Syntax error${loc}: ${validation.error}`);
+    }
+
+    // Intercept console.error to capture Strudel's swallowed errors
+    const capturedErrors: string[] = [];
+    const origConsoleError = console.error;
+    const origConsoleLog = console.log;
+
+    console.error = (...args: any[]) => {
+      const msg = args.map(a => (typeof a === 'string' ? a : String(a))).join(' ');
+      // Strudel logs errors with "[eval] error:" prefix
+      if (msg.includes('[eval] error:') || msg.includes('Error:')) {
+        capturedErrors.push(msg);
+      }
+      // Still log to original for daemon.log visibility
+      origConsoleError.apply(console, args);
+    };
+
+    // Also capture console.log since some errors go there
+    console.log = (...args: any[]) => {
+      const msg = args.map(a => (typeof a === 'string' ? a : String(a))).join(' ');
+      if (msg.includes('[eval] error:')) {
+        capturedErrors.push(msg);
+      }
+      origConsoleLog.apply(console, args);
+    };
+
     try {
       await replInstance.evaluate(code);
-    } catch (err) {
-      const msg = (err as Error).message;
-      // Strudel's repl might log errors without throwing — check for common issues
-      throw new Error(`Strudel evaluation error: ${msg}`);
+    } catch (err: any) {
+      // If REPL does throw (unlikely but possible), capture it
+      capturedErrors.push(err.message || String(err));
+    } finally {
+      // Restore console
+      console.error = origConsoleError;
+      console.log = origConsoleLog;
+    }
+
+    // If errors were captured, throw them
+    if (capturedErrors.length > 0) {
+      // Extract the most meaningful error message
+      const errorMsg = capturedErrors
+        .map(msg => {
+          // Clean up "[eval] error: " prefix
+          const cleaned = msg.replace(/^\[eval\] error:\s*/i, '').trim();
+          // Remove stack trace lines (keep first line)
+          const firstLine = cleaned.split('\n')[0];
+          return firstLine;
+        })
+        .filter(Boolean)
+        .join('; ');
+
+      throw new Error(`Evaluation error: ${errorMsg}`);
     }
   };
 
@@ -137,5 +237,5 @@ export async function createEngine(): Promise<StrudelEngine> {
     }
   };
 
-  return { evaluate, stop, pause, start };
+  return { evaluate, validate, stop, pause, start };
 }

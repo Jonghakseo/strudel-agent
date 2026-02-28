@@ -195,6 +195,30 @@ async function handleEvaluate(req: IncomingMessage, res: ServerResponse) {
   }
 }
 
+async function handleValidate(req: IncomingMessage, res: ServerResponse) {
+  try {
+    const body = await readBody(req);
+    const { code } = JSON.parse(body);
+
+    if (!code || typeof code !== 'string') {
+      json(res, 400, { ok: false, error: 'Missing "code" in request body' });
+      return;
+    }
+
+    if (!engine) {
+      json(res, 500, { ok: false, error: 'Engine not initialized' });
+      return;
+    }
+
+    const result = engine.validate(code);
+    log(`Validate: valid=${result.valid}${result.error ? ` error=${result.error}` : ''}`);
+    json(res, 200, { ok: true, ...result });
+  } catch (err) {
+    log(`Validate error: ${(err as Error).message}`);
+    json(res, 500, { ok: false, error: (err as Error).message });
+  }
+}
+
 // ── HTTP Server ──
 
 const server = createServer(async (req, res) => {
@@ -214,6 +238,8 @@ const server = createServer(async (req, res) => {
       await handlePause(res);
     } else if (method === 'POST' && url === '/evaluate') {
       await handleEvaluate(req, res);
+    } else if (method === 'POST' && url === '/validate') {
+      await handleValidate(req, res);
     } else {
       json(res, 404, { ok: false, error: 'Not found' });
     }

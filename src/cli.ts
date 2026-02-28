@@ -130,15 +130,32 @@ program
   .description('Create a new song')
   .argument('<name>', 'Song name')
   .requiredOption('-c, --code <code>', 'Strudel code for the song')
-  .action(async (name: string, opts: { code: string }) => {
+  .option('--no-validate', 'Skip code validation')
+  .action(async (name: string, opts: { code: string; validate: boolean }) => {
     try {
+      // Validate code before saving (unless --no-validate)
+      if (opts.validate !== false) {
+        console.log(`${C.dim}Validating code...${C.reset}`);
+        const result = await client.validate(opts.code);
+        if (!result.valid) {
+          const loc = result.line != null ? ` ${C.dim}(line ${result.line}, col ${result.column})${C.reset}` : '';
+          console.error(`${C.red}✗ Code validation failed${loc}${C.reset}`);
+          console.error(`  ${C.red}${result.error}${C.reset}`);
+          console.error();
+          formatCodeWithError(opts.code, result.line, result.column);
+          console.error();
+          console.error(`${C.dim}Tip: Fix the code and try again, or use --no-validate to skip validation.${C.reset}`);
+          process.exit(1);
+        }
+      }
+
       const version = await storage.makeSong(name, opts.code);
       console.log(
         `${C.green}✓${C.reset} Created song ${C.cyan}${C.bold}${name}${C.reset} ${C.dim}(v1, ${version.createdAt})${C.reset}`,
       );
       console.log(`${C.dim}  Code: ${opts.code}${C.reset}`);
     } catch (err) {
-      console.error(`${C.red}✗${C.reset} ${(err as Error).message}`);
+      formatError(err as Error);
       process.exit(1);
     }
   });

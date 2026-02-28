@@ -83,10 +83,28 @@ export interface ErrorResponse {
   error: string;
 }
 
+// ── Validation Types ──
+
+export interface ValidationResult {
+  valid: boolean;
+  error?: string;
+  line?: number;
+  column?: number;
+}
+
+export interface ValidateResponse {
+  ok: boolean;
+  valid: boolean;
+  error?: string;
+  line?: number;
+  column?: number;
+}
+
 // ── Engine Interface ──
 
 export interface StrudelEngine {
   evaluate: (code: string) => Promise<void>;
+  validate: (code: string) => ValidationResult;
   stop: () => void;
   pause: () => void;
   start: () => void;

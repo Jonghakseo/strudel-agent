@@ -27,6 +27,7 @@ import type {
   StopResponse,
   PauseResponse,
   EvaluateResponse,
+  ValidateResponse,
 } from './types.js';
 import { mkdirSync } from 'node:fs';
 import { openSync, closeSync } from 'node:fs';
@@ -254,6 +255,15 @@ export async function evaluate(
 ): Promise<EvaluateResponse> {
   const pidInfo = await ensureDaemon();
   return post<EvaluateResponse>('/evaluate', { code, name, version }, pidInfo);
+}
+
+/**
+ * Validate Strudel code without playing it.
+ * Auto-starts daemon if not running.
+ */
+export async function validate(code: string): Promise<ValidateResponse> {
+  const pidInfo = await ensureDaemon();
+  return post<ValidateResponse>('/validate', { code }, pidInfo);
 }
 
 /**
