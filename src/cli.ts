@@ -304,6 +304,56 @@ program
     }
   });
 
+// ── version-change ──
+
+program
+  .command('version-change')
+  .description('Roll back to a previous version as a smooth update (no stop/start)')
+  .argument('<version>', 'Version number to restore', parseInt)
+  .option('-n, --name <name>', 'Song name (default: currently playing song)')
+  .action(async (version: number, opts: { name?: string }) => {
+    try {
+      if (isNaN(version) || !Number.isInteger(version) || version < 1) {
+        console.error(`${C.red}✗${C.reset} Invalid version number: must be a positive integer.`);
+        process.exit(1);
+      }
+
+      let songName = opts.name;
+
+      if (!songName) {
+        const running = await client.isDaemonRunning();
+        if (!running) {
+          console.error(
+            `${C.red}✗${C.reset} No song specified and daemon is not running. Use ${C.dim}--name <song>${C.reset} or start playing first.`,
+          );
+          process.exit(1);
+        }
+        const cur = await client.getCurrent();
+        if (!cur.name) {
+          console.error(
+            `${C.red}✗${C.reset} No song is currently loaded. Use ${C.dim}--name <song>${C.reset} to specify one.`,
+          );
+          process.exit(1);
+        }
+        songName = cur.name;
+      }
+
+      const { code, fromVersion, newVersion } = await storage.promoteVersion(songName, version);
+
+      console.log(
+        `${C.green}✓${C.reset} Promoted ${C.cyan}${songName}${C.reset} v${fromVersion} → ${C.bold}v${newVersion}${C.reset}`,
+      );
+
+      await client.evaluate(code, songName, newVersion);
+      console.log(
+        `${C.green}▶${C.reset} ${C.bold}Now playing:${C.reset} ${C.cyan}${songName}${C.reset} ${C.dim}(v${newVersion})${C.reset}`,
+      );
+    } catch (err) {
+      formatError(err as Error);
+      process.exit(1);
+    }
+  });
+
 // ── delete ──
 
 program

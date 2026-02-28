@@ -236,6 +236,44 @@ export async function renameSong(oldName: string, newName: string): Promise<void
 }
 
 /**
+ * Promote a historical version to a new latest version (append-only).
+ * Fetches code from `fromVersion` and pushes it as a new version.
+ */
+export async function promoteVersion(
+  name: string,
+  fromVersion: number,
+): Promise<{ code: string; fromVersion: number; newVersion: number }> {
+  return withLock(SONGS_LOCK, async () => {
+    const data = await loadSongs();
+    const song = data.songs[name];
+
+    if (!song) {
+      throw new Error(`Song '${name}' not found. Use 'strudel make' to create one.`);
+    }
+
+    const totalVersions = song.versions.length;
+    const versionIndex = fromVersion - 1;
+
+    if (versionIndex < 0 || versionIndex >= totalVersions) {
+      throw new Error(
+        `Version ${fromVersion} not found. Song '${name}' has ${totalVersions} version(s).`,
+      );
+    }
+
+    const code = song.versions[versionIndex].code;
+    const newVersion: SongVersion = {
+      code,
+      createdAt: new Date().toISOString(),
+    };
+
+    song.versions.push(newVersion);
+    await saveSongs(data);
+
+    return { code, fromVersion, newVersion: song.versions.length };
+  });
+}
+
+/**
  * Get the latest code for a song (used by play command).
  */
 export async function getSongCode(

@@ -60,6 +60,18 @@ strudel detail ambient          # 최신 버전
 strudel detail ambient --ver 1  # v1 코드 확인
 ```
 
+### `version-change` — 이전 버전으로 부드럽게 전환
+
+```bash
+# 현재 재생 중인 곡의 v1 코드를 새 버전으로 복원하고 즉시 전환
+strudel version-change 1
+
+# 특정 곡 지정
+strudel version-change 2 --name ambient
+```
+
+> 재생을 멈추지 않고 이전 버전의 코드를 새 최신 버전으로 추가한 뒤 부드럽게 전환합니다.
+
 ### `delete` — 곡 삭제
 
 ```bash
