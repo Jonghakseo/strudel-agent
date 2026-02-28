@@ -1,0 +1,7 @@
+declare module '@strudel/core';
+declare module '@strudel/mini';
+declare module '@strudel/webaudio';
+declare module '@strudel/tonal';
+declare module '@strudel/transpiler';
+declare module 'superdough';
+declare module 'node-web-audio-api';
