@@ -9,10 +9,10 @@
 
 // Catch known superdough errors that are non-fatal (buffer management in Node)
 process.on('uncaughtException', (err) => {
-  if (err.message?.includes('Cannot call `start` twice')) {
-    // Known superdough issue in Node.js — ignore
-    return;
-  }
+  // Known superdough issues in Node.js — suppress silently
+  if (err.message?.includes('Cannot call `start` twice')) return;
+  if (err.message?.includes('Cannot call `stop`')) return;
+  if (err.message?.includes('invalid state')) return;
   log(`Uncaught exception: ${err.message}\n${err.stack}`);
 });
 

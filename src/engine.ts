@@ -68,7 +68,7 @@ export async function createEngine(): Promise<StrudelEngine> {
     (webaudio as any).setAudioContext(audioContext);
   }
 
-  // Register synth sounds
+  // Register synth sounds (triangle, sawtooth, sine, square, noise)
   if (typeof (webaudio as any).registerSynthSounds === 'function') {
     try {
       await (webaudio as any).registerSynthSounds();
@@ -76,6 +76,29 @@ export async function createEngine(): Promise<StrudelEngine> {
       // May fail if some sounds need network — not critical
     }
   }
+
+  // Register ZZFX sounds (z_sawtooth, z_sine, etc.)
+  if (typeof (webaudio as any).registerZZFXSounds === 'function') {
+    try {
+      await (webaudio as any).registerZZFXSounds();
+    } catch {
+      // Not critical
+    }
+  }
+
+  // Load default sample library (bd, sd, hh, piano, etc.)
+  // This is CRITICAL — without this, sample-based sounds won't play
+  if (typeof (webaudio as any).samples === 'function') {
+    try {
+      await (webaudio as any).samples('github:tidalcycles/dirt-samples');
+      console.log('[engine] Default samples loaded');
+    } catch (e) {
+      console.log('[engine] Warning: Could not load default samples:', (e as Error).message);
+    }
+  }
+
+  // Also register on globalThis so user code can call samples()
+  (globalThis as any).samples = (webaudio as any).samples;
 
   // Create the REPL instance — transpiler is CRITICAL for:
   // - $: syntax (parallel patterns)
@@ -101,11 +124,23 @@ export async function createEngine(): Promise<StrudelEngine> {
   // ── Validation ──
   // Uses the transpiler to pre-check code for syntax errors and
   // mini-notation parse errors WITHOUT executing the code.
+  // Pre-process code for CLI input: CLI users pass code as a single line,
+  // but Strudel expects $: patterns on separate lines and proper statement separation.
+  const preprocessCode = (code: string): string => {
+    let result = code;
+    // Add newline before $: if preceded by non-whitespace (e.g., "setcpm(30) $:" → "setcpm(30)\n$:")
+    result = result.replace(/([^\n;])\s+\$:/g, '$1;\n$:');
+    // Add newline before _$: (muted patterns)
+    result = result.replace(/([^\n;])\s+_\$:/g, '$1;\n_$:');
+    return result;
+  };
+
   const validate = (code: string): ValidationResult => {
+    const processed = preprocessCode(code);
     // Step 1: Try transpiling (catches JS syntax errors and mini-notation errors)
     if (transpilerFn) {
       try {
-        transpilerFn(code);
+        transpilerFn(processed);
       } catch (err: any) {
         const msg = err.message || String(err);
         return {
@@ -138,6 +173,8 @@ export async function createEngine(): Promise<StrudelEngine> {
   // and resolves with undefined. We intercept console.error to capture
   // these swallowed errors and throw them properly.
   const evaluate = async (code: string): Promise<void> => {
+    // Pre-process for CLI single-line input
+    code = preprocessCode(code);
     // Pre-validate: catches syntax and mini-notation errors before eval
     const validation = validate(code);
     if (!validation.valid) {
@@ -145,26 +182,31 @@ export async function createEngine(): Promise<StrudelEngine> {
       throw new Error(`Syntax error${loc}: ${validation.error}`);
     }
 
-    // Intercept console.error to capture Strudel's swallowed errors
+    // Intercept console to capture Strudel's swallowed errors.
+    // Strudel REPL logs errors in two parts:
+    //   console.log("%c[eval] error: <msg>", "background-color:...;color:...;...")
+    //   console.error("ErrorType: <msg>")
+    // We capture both and extract the clean error message.
     const capturedErrors: string[] = [];
     const origConsoleError = console.error;
     const origConsoleLog = console.log;
 
     console.error = (...args: any[]) => {
-      const msg = args.map(a => (typeof a === 'string' ? a : String(a))).join(' ');
-      // Strudel logs errors with "[eval] error:" prefix
-      if (msg.includes('[eval] error:') || msg.includes('Error:')) {
-        capturedErrors.push(msg);
+      const firstArg = typeof args[0] === 'string' ? args[0] : String(args[0]);
+      // Strudel logs the raw Error object/message via console.error
+      if (firstArg.includes('Error:') || firstArg.includes('error')) {
+        capturedErrors.push(firstArg);
       }
-      // Still log to original for daemon.log visibility
       origConsoleError.apply(console, args);
     };
 
-    // Also capture console.log since some errors go there
     console.log = (...args: any[]) => {
-      const msg = args.map(a => (typeof a === 'string' ? a : String(a))).join(' ');
-      if (msg.includes('[eval] error:')) {
-        capturedErrors.push(msg);
+      const firstArg = typeof args[0] === 'string' ? args[0] : String(args[0]);
+      // Strudel logs "[eval] error: ..." via console.log with %c CSS
+      if (firstArg.includes('[eval] error:')) {
+        // Strip %c and extract the actual error message
+        const cleaned = firstArg.replace(/%c/g, '').trim();
+        capturedErrors.push(cleaned);
       }
       origConsoleLog.apply(console, args);
     };
@@ -182,27 +224,27 @@ export async function createEngine(): Promise<StrudelEngine> {
 
     // If errors were captured, throw them
     if (capturedErrors.length > 0) {
-      // Extract the most meaningful error message
+      // Extract the most meaningful error message.
+      // Strudel logs errors in two parts:
+      //   "[eval] error: <short msg>"  (via console.log)
+      //   "ErrorType: <full msg>"      (via console.error)
+      // We prefer the [eval] error version as it's more concise.
       const errorMsg = capturedErrors
         .map(msg => {
-          // Clean up "[eval] error: " prefix and CSS formatting from Strudel's console
-          let cleaned = msg
-            .replace(/^\[eval\] error:\s*/i, '')
-            .replace(/%c/g, '')  // Remove %c format markers
-            .replace(/background-color:[^;]+;/g, '')  // Remove CSS
-            .replace(/color:[^;]+;/g, '')
-            .replace(/border-radius:[^;]+;/g, '')
-            .replace(/font-weight:[^;]+;/g, '')
-            .trim();
-          // Remove stack trace lines (keep first line)
+          // Clean up "[eval] error: " prefix
+          const cleaned = msg.replace(/^\[eval\] error:\s*/i, '').trim();
+          // Remove stack trace lines (keep first meaningful line)
           const firstLine = cleaned.split('\n')[0].trim();
           return firstLine;
         })
         .filter(Boolean);
 
-      // Deduplicate (Strudel may log the same error with different formatting)
+      // Deduplicate (Strudel logs error msg twice: once in [eval] and once as Error)
       const unique = [...new Set(errorMsg)];
-      throw new Error(`Evaluation error: ${unique.join('; ')}`);
+
+      // Prefer the shorter/cleaner message (usually the [eval] error one)
+      const bestMsg = unique.reduce((a, b) => a.length <= b.length ? a : b, unique[0]);
+      throw new Error(`Evaluation error: ${bestMsg}`);
     }
   };
 
