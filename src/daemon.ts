@@ -172,11 +172,8 @@ async function handleEvaluate(req: IncomingMessage, res: ServerResponse) {
       return;
     }
 
-    // Stop current and evaluate new code
-    if (state.state === 'playing') {
-      engine.stop();
-    }
-
+    // Evaluate new code — Strudel's REPL seamlessly replaces the active pattern
+    // without stopping the scheduler, so the transition is smooth (no gap).
     await engine.evaluate(code);
 
     state = {
