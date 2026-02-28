@@ -185,16 +185,24 @@ export async function createEngine(): Promise<StrudelEngine> {
       // Extract the most meaningful error message
       const errorMsg = capturedErrors
         .map(msg => {
-          // Clean up "[eval] error: " prefix
-          const cleaned = msg.replace(/^\[eval\] error:\s*/i, '').trim();
+          // Clean up "[eval] error: " prefix and CSS formatting from Strudel's console
+          let cleaned = msg
+            .replace(/^\[eval\] error:\s*/i, '')
+            .replace(/%c/g, '')  // Remove %c format markers
+            .replace(/background-color:[^;]+;/g, '')  // Remove CSS
+            .replace(/color:[^;]+;/g, '')
+            .replace(/border-radius:[^;]+;/g, '')
+            .replace(/font-weight:[^;]+;/g, '')
+            .trim();
           // Remove stack trace lines (keep first line)
-          const firstLine = cleaned.split('\n')[0];
+          const firstLine = cleaned.split('\n')[0].trim();
           return firstLine;
         })
-        .filter(Boolean)
-        .join('; ');
+        .filter(Boolean);
 
-      throw new Error(`Evaluation error: ${errorMsg}`);
+      // Deduplicate (Strudel may log the same error with different formatting)
+      const unique = [...new Set(errorMsg)];
+      throw new Error(`Evaluation error: ${unique.join('; ')}`);
     }
   };
 

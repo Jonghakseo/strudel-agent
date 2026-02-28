@@ -199,6 +199,23 @@ export async function listSongs(): Promise<string[]> {
 }
 
 /**
+ * Delete a song by name.
+ * Throws if song doesn't exist.
+ */
+export async function deleteSong(name: string): Promise<void> {
+  return withLock(SONGS_LOCK, async () => {
+    const data = await loadSongs();
+
+    if (!data.songs[name]) {
+      throw new Error(`Song '${name}' not found.`);
+    }
+
+    delete data.songs[name];
+    await saveSongs(data);
+  });
+}
+
+/**
  * Get the latest code for a song (used by play command).
  */
 export async function getSongCode(

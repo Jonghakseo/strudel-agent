@@ -11,6 +11,7 @@
  *   make <name> --code <code>                 Create a new song
  *   update <name> --from <s> --to <s> [--index <n>]  Find & replace in song code
  *   detail <name> [--version <n>]             Show song code
+ *   delete <name>                             Delete a saved song
  *   list                                      List all saved songs
  */
 
@@ -18,6 +19,74 @@ import { Command } from 'commander';
 import { C } from './constants.js';
 import * as storage from './storage.js';
 import * as client from './client.js';
+
+// ── Error Formatting Helpers ──
+
+/**
+ * Display code with line numbers, highlighting the error line.
+ */
+function formatCodeWithError(code: string, errorLine?: number, errorCol?: number): void {
+  const lines = code.split('\n');
+  const lineNumWidth = String(lines.length).length;
+
+  console.error(`${C.dim}  ┌──────────────────────────────────${C.reset}`);
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = String(i + 1).padStart(lineNumWidth, ' ');
+    const isErrorLine = errorLine != null && i + 1 === errorLine;
+
+    if (isErrorLine) {
+      console.error(`${C.red}  │ ${lineNum} │ ${lines[i]}${C.reset}`);
+      // Show column pointer
+      if (errorCol != null) {
+        const pointer = ' '.repeat(errorCol) + '^';
+        console.error(`${C.red}  │ ${' '.repeat(lineNumWidth)} │ ${pointer}${C.reset}`);
+      }
+    } else {
+      console.error(`${C.dim}  │ ${lineNum} │${C.reset} ${lines[i]}`);
+    }
+  }
+  console.error(`${C.dim}  └──────────────────────────────────${C.reset}`);
+}
+
+/**
+ * Format and display an error message. If the error message contains
+ * line/column info, extract it and show the code context.
+ */
+function formatError(err: Error, code?: string): void {
+  const msg = err.message;
+
+  // Try to extract line/column from error messages like:
+  // "Syntax error (line 1, col 5): ..."
+  // "Evaluation error: ..."
+  const lineMatch = msg.match(/line (\d+)/i);
+  const colMatch = msg.match(/col(?:umn)? (\d+)/i);
+
+  const errorLine = lineMatch ? parseInt(lineMatch[1], 10) : undefined;
+  const errorCol = colMatch ? parseInt(colMatch[1], 10) : undefined;
+
+  // Determine error type for better display
+  let errorType = 'Error';
+  let errorDetail = msg;
+
+  if (msg.includes('Syntax error')) {
+    errorType = 'Syntax Error';
+    errorDetail = msg.replace(/^Syntax error[^:]*:\s*/i, '');
+  } else if (msg.includes('Evaluation error')) {
+    errorType = 'Evaluation Error';
+    errorDetail = msg.replace(/^Evaluation error:\s*/i, '');
+  } else if (msg.includes('not found')) {
+    errorType = 'Not Found';
+  } else if (msg.includes('not defined')) {
+    errorType = 'Reference Error';
+  }
+
+  console.error(`${C.red}✗ ${errorType}:${C.reset} ${errorDetail}`);
+
+  if (code && (errorLine || msg.includes('error'))) {
+    console.error();
+    formatCodeWithError(code, errorLine, errorCol);
+  }
+}
 
 const program = new Command();
 
@@ -34,8 +103,10 @@ program
   .argument('<name>', 'Song name')
   .option('--ver <n>', 'Version number (default: latest)', parseInt)
   .action(async (name: string, opts: { ver?: number }) => {
+    let songCode: string | undefined;
     try {
       const { code, version } = await storage.getSongCode(name, opts.ver);
+      songCode = code;
       console.log(`${C.dim}Starting daemon...${C.reset}`);
 
       const result = await client.play(code, name, version);
@@ -44,7 +115,7 @@ program
         `${C.green}▶${C.reset} ${C.bold}Now playing:${C.reset} ${C.cyan}${result.name}${C.reset} ${C.dim}(v${result.version})${C.reset}`,
       );
     } catch (err) {
-      console.error(`${C.red}✗${C.reset} ${(err as Error).message}`);
+      formatError(err as Error, songCode);
       process.exit(1);
     }
   });
@@ -170,8 +241,25 @@ program
   .requiredOption('-t, --to <string>', 'Replacement text')
   .option('-i, --index <n>', 'Occurrence index (0-based) if multiple matches', parseInt)
   .action(async (name: string, opts: { from: string; to: string; index?: number }) => {
+    let updatedCode: string | undefined;
     try {
       const { code, version } = await storage.updateSong(name, opts.from, opts.to, opts.index);
+      updatedCode = code;
+
+      // Validate the updated code before playing
+      console.log(`${C.dim}Validating updated code...${C.reset}`);
+      const validation = await client.validate(code);
+      if (!validation.valid) {
+        const loc = validation.line != null ? ` ${C.dim}(line ${validation.line}, col ${validation.column})${C.reset}` : '';
+        console.error(`${C.red}✗ Updated code has errors${loc}${C.reset}`);
+        console.error(`  ${C.red}${validation.error}${C.reset}`);
+        console.error();
+        formatCodeWithError(code, validation.line, validation.column);
+        console.error();
+        console.error(`${C.yellow}⚠${C.reset} Song saved as v${version} but NOT playing due to errors.`);
+        console.error(`${C.dim}Fix with: strudel update ${name} --from '...' --to '...'${C.reset}`);
+        process.exit(1);
+      }
 
       console.log(
         `${C.green}✓${C.reset} Updated ${C.cyan}${name}${C.reset} → ${C.bold}v${version}${C.reset}`,
@@ -185,7 +273,7 @@ program
         `${C.green}▶${C.reset} ${C.bold}Now playing:${C.reset} ${C.cyan}${name}${C.reset} ${C.dim}(v${version})${C.reset}`,
       );
     } catch (err) {
-      console.error(`${C.red}✗${C.reset} ${(err as Error).message}`);
+      formatError(err as Error, updatedCode);
       process.exit(1);
     }
   });
@@ -210,6 +298,32 @@ program
         console.log(`${C.dim}│${C.reset} ${line}`);
       }
       console.log(`${C.dim}└──────────────────────────────────${C.reset}`);
+    } catch (err) {
+      console.error(`${C.red}✗${C.reset} ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
+// ── delete ──
+
+program
+  .command('delete')
+  .description('Delete a saved song')
+  .argument('<name>', 'Song name')
+  .action(async (name: string) => {
+    try {
+      // If the song is currently playing, stop playback first
+      const running = await client.isDaemonRunning();
+      if (running) {
+        const cur = await client.getCurrent();
+        if (cur.name === name && cur.state !== 'stopped') {
+          await client.stop();
+          console.log(`${C.yellow}■${C.reset} Stopped playback of ${C.cyan}${name}${C.reset}.`);
+        }
+      }
+
+      await storage.deleteSong(name);
+      console.log(`${C.green}✓${C.reset} Deleted song ${C.cyan}${C.bold}${name}${C.reset}.`);
     } catch (err) {
       console.error(`${C.red}✗${C.reset} ${(err as Error).message}`);
       process.exit(1);
