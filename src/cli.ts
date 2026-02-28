@@ -338,15 +338,11 @@ program
         songName = cur.name;
       }
 
-      const { code, fromVersion, newVersion } = await storage.promoteVersion(songName, version);
+      const { code } = await storage.detailSong(songName, version);
 
+      await client.evaluate(code, songName, version);
       console.log(
-        `${C.green}✓${C.reset} Promoted ${C.cyan}${songName}${C.reset} v${fromVersion} → ${C.bold}v${newVersion}${C.reset}`,
-      );
-
-      await client.evaluate(code, songName, newVersion);
-      console.log(
-        `${C.green}▶${C.reset} ${C.bold}Now playing:${C.reset} ${C.cyan}${songName}${C.reset} ${C.dim}(v${newVersion})${C.reset}`,
+        `${C.green}▶${C.reset} ${C.bold}Now playing:${C.reset} ${C.cyan}${songName}${C.reset} ${C.dim}(v${version})${C.reset} ${C.dim}(history unchanged)${C.reset}`,
       );
     } catch (err) {
       formatError(err as Error);
