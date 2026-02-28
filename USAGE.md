@@ -60,6 +60,18 @@ strudel detail ambient          # 최신 버전
 strudel detail ambient --ver 1  # v1 코드 확인
 ```
 
+### `delete` — 곡 삭제
+
+```bash
+strudel delete my-beat
+```
+
+### `rename` — 곡 이름 변경
+
+```bash
+strudel rename my-beat my-groove
+```
+
 ### `list` — 저장된 곡 목록
 
 ```bash
@@ -133,10 +145,33 @@ strudel stop
 | `.volume()` | `.gain()` |
 | `.synth("saw")` | `.sound("sawtooth")` |
 
+### 사용 가능한 사운드 목록
+
+**드럼 (기본 내장)**
+`bd` `sd` `hh` `oh` `cp` `rim` `cr` `rd` `lt` `mt` `ht` `cb`
+
+**드럼 머신** (`.bank()` 사용)
+`RolandTR808` `RolandTR909` `RolandTR707` `RolandTR505` `AkaiLinn` `RhythmAce` `CasioRZ1` `ViscoSpaceDrum`
+```
+s("bd sd [~ bd] sd, hh*8").bank("RolandTR909")
+```
+
+**신스 (파형)**
+`sine` `sawtooth` `square` `triangle`
+
+**샘플 악기 (네트워크 필요 — 첫 재생 시 다운로드)**
+`piano` `casio` `jazz` `metal` `east` `crow` `space` `wind` `insect` `numbers`
+
+**GM 사운드 (네트워크 필요)**
+`gm_acoustic_bass` `gm_electric_guitar_muted` `gm_synth_strings_1` `gm_synth_bass_1` `gm_voice_oohs` `gm_blown_bottle` `gm_xylophone` `gm_accordion` `gm_epiano1`
+
+> 💡 신스(`sine`, `sawtooth` 등)는 네트워크 없이 즉시 재생됩니다.
+> 샘플/GM 사운드는 첫 재생 시 다운로드되므로 초반 1~2초 지연이 있을 수 있습니다.
+
 ### CLI 환경 제약사항
 - **AudioWorklet 미지원** — `.shape()`, `.crush()`, `.coarse()` 등 일부 이펙트는 소리가 안 남 (브라우저 전용 기능)
 - **FM 합성 주의** — `.fm()` 값이 높으면 (8 이상) 노이즈가 심할 수 있음. CLI에서는 `.fm(1~4)` 권장
-- **샘플 로딩** — `samples('github:...')` 원격 샘플은 네트워크 필요. 기본 내장 사운드(`bd`, `sd`, `hh`, `piano`, `sawtooth` 등) 사용 권장
+- **샘플 첫 로딩** — 피아노, GM 사운드 등은 네트워크에서 다운로드됨. 첫 재생 시 약간의 지연 후 정상 동작
 
 ## 주의사항 & 팁
 
