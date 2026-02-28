@@ -330,6 +330,23 @@ program
     }
   });
 
+// ── rename ──
+
+program
+  .command('rename')
+  .description('Rename a saved song')
+  .argument('<old-name>', 'Current song name')
+  .argument('<new-name>', 'New song name')
+  .action(async (oldName: string, newName: string) => {
+    try {
+      await storage.renameSong(oldName, newName);
+      console.log(`${C.green}✓${C.reset} Renamed ${C.cyan}${C.bold}${oldName}${C.reset} → ${C.cyan}${C.bold}${newName}${C.reset}`);
+    } catch (err) {
+      console.error(`${C.red}✗${C.reset} ${(err as Error).message}`);
+      process.exit(1);
+    }
+  });
+
 // ── list ──
 
 program

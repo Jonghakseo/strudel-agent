@@ -216,6 +216,26 @@ export async function deleteSong(name: string): Promise<void> {
 }
 
 /**
+ * Rename a song. Throws if source doesn't exist or target already exists.
+ */
+export async function renameSong(oldName: string, newName: string): Promise<void> {
+  return withLock(SONGS_LOCK, async () => {
+    const data = await loadSongs();
+
+    if (!data.songs[oldName]) {
+      throw new Error(`Song '${oldName}' not found.`);
+    }
+    if (data.songs[newName]) {
+      throw new Error(`Song '${newName}' already exists.`);
+    }
+
+    data.songs[newName] = data.songs[oldName];
+    delete data.songs[oldName];
+    await saveSongs(data);
+  });
+}
+
+/**
  * Get the latest code for a song (used by play command).
  */
 export async function getSongCode(
