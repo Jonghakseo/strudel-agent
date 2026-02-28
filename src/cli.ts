@@ -354,6 +354,90 @@ program
     }
   });
 
+// ── sequence ──
+
+program
+  .command('sequence')
+  .description('Chain specific historical versions of a song with per-step delays')
+  .argument('<name>', 'Song name')
+  .requiredOption('--versions <json>', 'JSON array of [version, delaySec] pairs')
+  .action(async (name: string, opts: { versions: string }) => {
+    // Parse JSON
+    let steps: unknown;
+    try {
+      steps = JSON.parse(opts.versions);
+    } catch {
+      console.error(
+        `${C.red}✗${C.reset} Invalid JSON for --versions. Expected format: ${C.dim}[[version, delaySec], ...]${C.reset}`,
+      );
+      console.error(`${C.dim}  Example: '[[1,8],[3,12],[2,6]]'${C.reset}`);
+      process.exit(1);
+    }
+
+    // Validate structure
+    if (!Array.isArray(steps) || steps.length === 0) {
+      console.error(`${C.red}✗${C.reset} --versions must be a non-empty JSON array.`);
+      process.exit(1);
+    }
+
+    for (let i = 0; i < steps.length; i++) {
+      const item = steps[i];
+      if (
+        !Array.isArray(item) ||
+        item.length !== 2 ||
+        typeof item[0] !== 'number' ||
+        typeof item[1] !== 'number'
+      ) {
+        console.error(
+          `${C.red}✗${C.reset} Invalid entry at index ${i}: each item must be ${C.dim}[version, delaySec]${C.reset} (two numbers).`,
+        );
+        process.exit(1);
+      }
+      const [ver, delay] = item as [number, number];
+      if (!Number.isInteger(ver) || ver < 1) {
+        console.error(
+          `${C.red}✗${C.reset} Invalid version at index ${i}: must be a positive integer, got ${ver}.`,
+        );
+        process.exit(1);
+      }
+      if (delay < 0) {
+        console.error(
+          `${C.red}✗${C.reset} Invalid delay at index ${i}: must be >= 0, got ${delay}.`,
+        );
+        process.exit(1);
+      }
+    }
+
+    const validated = steps as [number, number][];
+    const total = validated.length;
+
+    try {
+      for (let i = 0; i < total; i++) {
+        const [ver, delay] = validated[i];
+        const { code, newVersion } = await storage.promoteVersion(name, ver);
+        await client.evaluate(code, name, newVersion);
+
+        if (i < total - 1) {
+          console.log(
+            `${C.green}▶${C.reset} ${C.dim}[${i + 1}/${total}]${C.reset} v${ver} → new v${newVersion}, next in ${delay}s`,
+          );
+          await new Promise((r) => setTimeout(r, delay * 1000));
+        } else {
+          console.log(
+            `${C.green}▶${C.reset} ${C.dim}[${i + 1}/${total}]${C.reset} v${ver} → new v${newVersion} ${C.dim}(done)${C.reset}`,
+          );
+        }
+      }
+
+      console.log(
+        `${C.green}✓${C.reset} Sequence complete for ${C.cyan}${name}${C.reset} — ${total} step(s) applied.`,
+      );
+    } catch (err) {
+      formatError(err as Error);
+      process.exit(1);
+    }
+  });
+
 // ── delete ──
 
 program

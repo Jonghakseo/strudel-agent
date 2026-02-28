@@ -72,6 +72,17 @@ strudel version-change 2 --name ambient
 
 > 재생을 멈추지 않고 이전 버전의 코드를 새 최신 버전으로 추가한 뒤 부드럽게 전환합니다.
 
+### `sequence` — 버전 시퀀스 자동 전환
+
+```bash
+# v1 → 8초 대기 → v3 → 12초 대기 → v2 (완료)
+strudel sequence my-song --versions '[[1,8],[3,12],[2,6]]'
+```
+
+- 지정한 버전들을 순서대로 새 최신 버전으로 승격하고 즉시 `evaluate` 전환 (재생 중단 없음)
+- 각 단계 사이에 지정한 초만큼 대기
+- 마지막 단계 적용 후 종료
+
 ### `delete` — 곡 삭제
 
 ```bash
