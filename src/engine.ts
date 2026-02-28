@@ -86,19 +86,40 @@ export async function createEngine(): Promise<StrudelEngine> {
     }
   }
 
-  // Load default sample library (bd, sd, hh, piano, etc.)
-  // This is CRITICAL — without this, sample-based sounds won't play
-  if (typeof (webaudio as any).samples === 'function') {
+  // Load default sample libraries — mirrors the browser REPL's prebake.mjs
+  // Source: https://codeberg.org/uzu/strudel/src/branch/main/packages/repl/prebake.mjs
+  const samplesFn = (webaudio as any).samples;
+  if (typeof samplesFn === 'function') {
+    const ds = 'https://raw.githubusercontent.com/felixroos/dough-samples/main';
+    const sampleSources = [
+      [`${ds}/tidal-drum-machines.json`, 'drum machines (TR808, TR909 etc.)'],
+      [`${ds}/piano.json`, 'piano'],
+      [`${ds}/Dirt-Samples.json`, 'dirt samples (bd, sd, hh etc.)'],
+      [`${ds}/vcsl.json`, 'VCSL (gm_acoustic_bass, gm_synth_strings_1 etc.)'],
+    ];
+    const results = await Promise.allSettled(
+      sampleSources.map(([url, label]) =>
+        samplesFn(url).then(() => console.log(`[engine] Loaded: ${label}`))
+      )
+    );
+    const failed = results.filter(r => r.status === 'rejected');
+    if (failed.length > 0) {
+      console.log(`[engine] Warning: ${failed.length} sample source(s) failed to load`);
+    }
+  }
+
+  // Register alias bank for drum machines
+  if (typeof (webaudio as any).aliasBank === 'function') {
     try {
-      await (webaudio as any).samples('github:tidalcycles/dirt-samples');
-      console.log('[engine] Default samples loaded');
-    } catch (e) {
-      console.log('[engine] Warning: Could not load default samples:', (e as Error).message);
+      const ts = 'https://raw.githubusercontent.com/todepond/samples/main';
+      await (webaudio as any).aliasBank(`${ts}/tidal-drum-machines-alias.json`);
+    } catch {
+      // Not critical
     }
   }
 
   // Also register on globalThis so user code can call samples()
-  (globalThis as any).samples = (webaudio as any).samples;
+  (globalThis as any).samples = samplesFn;
 
   // Create the REPL instance — transpiler is CRITICAL for:
   // - $: syntax (parallel patterns)
