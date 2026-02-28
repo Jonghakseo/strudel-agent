@@ -160,6 +160,39 @@ if (!(g as any).fetch) {
   safeSet('fetch', () => Promise.reject(new Error('fetch not available')));
 }
 
+// ── Patch AudioScheduledSourceNode.start() to prevent "Cannot call start twice" ──
+// superdough recycles audio nodes and calls start() again on ended nodes,
+// which throws in node-web-audio-api. We make start() idempotent.
+const sourceNodeClasses = ['OscillatorNode', 'AudioBufferSourceNode', 'ConstantSourceNode'];
+for (const className of sourceNodeClasses) {
+  const Cls = (g as any)[className];
+  if (Cls?.prototype?.start) {
+    const originalStart = Cls.prototype.start;
+    Cls.prototype.start = function (...args: unknown[]) {
+      if ((this as any).__started) return;
+      (this as any).__started = true;
+      try {
+        return originalStart.apply(this, args);
+      } catch (e: any) {
+        if (e.message?.includes('start') || e.message?.includes('invalid state')) {
+          return; // silently ignore
+        }
+        throw e;
+      }
+    };
+  }
+  if (Cls?.prototype?.stop) {
+    const originalStop = Cls.prototype.stop;
+    Cls.prototype.stop = function (...args: unknown[]) {
+      try {
+        return originalStop.apply(this, args);
+      } catch {
+        return; // silently ignore stop errors too
+      }
+    };
+  }
+}
+
 // ── Stub AudioWorkletNode ──
 // `node-web-audio-api` may not fully support AudioWorklet.
 // Strudel uses AudioWorkletNode for some effects; this stub makes them silent passthroughs.
