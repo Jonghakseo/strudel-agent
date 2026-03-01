@@ -107,6 +107,27 @@ strudel make brass-duo -c 'setcpm(24) $: note("<g4 a4 bb4 c5>").sound("gm_trumpe
 
 > ⚠️ SoundFont 악기는 **첫 사용 시 sf2 파일을 다운로드/로드**하므로 초기 2~5초 지연이 발생할 수 있습니다. 이후 재생은 즉시 시작됩니다.
 
+### 보이스/스피치 샘플 사용 (Shabda)
+
+Strudel은 Shabda 샘플 소스를 통해 음성 샘플도 사용할 수 있습니다.
+
+```strudel
+samples('shabda/speech:the_drum,forever')
+samples('shabda/speech/fr-FR/m:magnifique')
+
+$: s("the_drum*2").chop(16).speed(rand.range(0.85,1.1))
+$: s("forever magnifique").slow(4).late(0.125)
+```
+
+CLI에서도 동일하게 사용 가능:
+
+```bash
+strudel make voice-demo -c 'samples("shabda/speech:the_drum,forever") samples("shabda/speech/fr-FR/m:magnifique") $: s("the_drum*2").chop(16).speed(rand.range(0.85,1.1)) $: s("forever magnifique").slow(4).late(0.125)'
+strudel play voice-demo
+```
+
+> ⚠️ Shabda는 외부 소스 의존이 있으므로 네트워크 상태/원본 가용성에 따라 로딩 실패 가능성이 있습니다.
+
 ### CLI 환경 제약사항
 - **AudioWorklet 미지원** — `.shape()` `.crush()` `.coarse()` 등 브라우저 전용 이펙트 사용 불가
 - **FM 합성** — `.fm()` 값 8 이상 시 노이즈 심함. CLI에서는 `.fm(1~4)` 권장
