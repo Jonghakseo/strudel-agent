@@ -64,6 +64,15 @@ strudel stop
 ### 잘못된 함수명
 `.reverb()`→`.room()` · `.lowpass()`→`.lpf()` · `.bpm(120)`→`setcpm(30)` · `.volume()`→`.gain()` · `.synth("saw")`→`.sound("sawtooth")`
 
+### 사운드 선택 우선순위 (권장)
+
+1. **GM 악기 우선 사용** (`gm_*`) — 가장 안정적이고 음색이 풍부함
+2. 드럼/드럼머신 (`bd`, `sd`, `.bank("RolandTR909")`) — 리듬용
+3. 기본 파형 신스 (`sine`, `triangle`, `sawtooth`, `square`) — 즉시 반응 필요할 때
+4. 기타 샘플 악기 (`piano`, `casio`, `jazz` 등) — 스타일용
+
+> 💡 멜로디/화성 파트는 가능하면 `gm_*`로 먼저 작성하고, 이후 필요하면 다른 음색으로 바꾸는 걸 권장합니다.
+
 ### 사용 가능한 사운드 목록
 
 **드럼 (내장):** `bd` `sd` `hh` `oh` `cp` `rim` `cr` `rd` `lt` `mt` `ht` `cb`
