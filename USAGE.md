@@ -188,6 +188,12 @@ s("bd sd [~ bd] sd, hh*8").bank("RolandTR909")
 **GM 사운드 (네트워크 필요)**
 `gm_acoustic_bass` `gm_electric_guitar_muted` `gm_synth_strings_1` `gm_synth_bass_1` `gm_voice_oohs` `gm_blown_bottle` `gm_xylophone` `gm_accordion` `gm_epiano1`
 
+**Soundfonts GM 악기 (추가 — `@strudel/soundfonts`)**
+`gm_violin` `gm_trumpet` `gm_flute` `gm_cello` `gm_french_horn` `gm_clarinet` `gm_oboe` 등 다양한 GM 악기를 soundfont로 사용할 수 있습니다.
+```
+note("c4 e4 g4 c5").sound("gm_violin").room(.5)
+```
+
 > 💡 신스(`sine`, `sawtooth` 등)는 네트워크 없이 즉시 재생됩니다.
 > 샘플/GM 사운드는 첫 재생 시 다운로드되므로 초반 1~2초 지연이 있을 수 있습니다.
 

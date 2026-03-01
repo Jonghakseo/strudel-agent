@@ -108,6 +108,17 @@ export async function createEngine(): Promise<StrudelEngine> {
     }
   }
 
+  // Register soundfonts (additional GM instruments)
+  try {
+    const soundfonts = await import('@strudel/soundfonts');
+    if (typeof soundfonts.registerSoundfonts === 'function') {
+      await soundfonts.registerSoundfonts();
+      console.log('[engine] Soundfonts registered');
+    }
+  } catch (err: any) {
+    console.log(`[engine] Warning: Soundfonts unavailable: ${err.message || err}`);
+  }
+
   // Register alias bank for drum machines
   if (typeof (webaudio as any).aliasBank === 'function') {
     try {
