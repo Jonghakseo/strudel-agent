@@ -80,6 +80,7 @@ strudel stop
 **드럼 머신** (`.bank()` 사용): `RolandTR808` `RolandTR909` `RolandTR707` `RolandTR505` `AkaiLinn` `RhythmAce` `CasioRZ1` `ViscoSpaceDrum`
 
 **신스 (파형):** `sine` `sawtooth` `square` `triangle` — 네트워크 불필요, 즉시 재생
+> 💡 `supersaw`는 CLI에서 자동으로 `sawtooth`로 매핑됩니다 (AudioWorklet 미지원 호환).
 
 **샘플 악기 (네트워크 필요):** `piano` `casio` `jazz` `metal` `east` `crow` `space` `wind` `insect` `numbers`
 

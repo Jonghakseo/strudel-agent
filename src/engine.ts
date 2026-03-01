@@ -91,6 +91,25 @@ export async function createEngine(): Promise<StrudelEngine> {
     }
   }
 
+  // ── Supersaw compatibility alias ──
+  // `supersaw` uses AudioWorklet (browser-only) so it silently fails in Node.
+  // Re-register it (and common variants) to use the basic `sawtooth` oscillator.
+  const soundMap = (webaudio as any).soundMap;
+  if (soundMap && typeof soundMap.get === 'function') {
+    const dict = soundMap.get();
+    const sawEntry = dict?.['sawtooth'];
+    if (sawEntry) {
+      const aliases = ['supersaw', 'super_saw', 'super-saw'];
+      soundMap.set(
+        aliases.reduce(
+          (acc: Record<string, unknown>, alias: string) => ({ ...acc, [alias]: sawEntry }),
+          { ...dict },
+        ),
+      );
+      console.log('[engine] Alias: supersaw -> sawtooth');
+    }
+  }
+
   // Load default sample libraries — mirrors the browser REPL's prebake.mjs
   // Source: https://codeberg.org/uzu/strudel/src/branch/main/packages/repl/prebake.mjs
   const samplesFn = (webaudio as any).samples;
