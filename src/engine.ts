@@ -60,6 +60,11 @@ export async function createEngine(): Promise<StrudelEngine> {
     sampleRate: 44100,
   });
 
+  // In Node runtime, context may start suspended — resume explicitly
+  if (audioContext.state === 'suspended') {
+    await audioContext.resume();
+  }
+
   // Set audio context for superdough/webaudio
   if (typeof (webaudio as any).setDefaultAudioContext === 'function') {
     (webaudio as any).setDefaultAudioContext(audioContext);
